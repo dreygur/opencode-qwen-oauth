@@ -3,12 +3,34 @@
  */
 
 import { spawn } from "node:child_process";
+import { Debouncer } from "./mutex.js";
+
+// Debouncer to prevent multiple rapid browser opens
+const browserDebouncer = new Debouncer();
 
 /**
  * Opens a URL in the default browser
  * Supports macOS, Windows, and Linux with fallback mechanisms
+ * Debounced to prevent multiple rapid calls
  */
 export function openBrowser(url: string): void {
+  openBrowserDebounced(url);
+}
+
+/**
+ * Internal debounced browser opening function
+ */
+const openBrowserDebounced = browserDebouncer.debounce(
+  async (url: string): Promise<void> => {
+    openBrowserInternal(url);
+  },
+  1000, // 1 second debounce
+);
+
+/**
+ * Internal function that actually opens the browser
+ */
+function openBrowserInternal(url: string): void {
   try {
     const platform = process.platform;
     

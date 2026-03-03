@@ -7,9 +7,13 @@
 
 import type { Plugin, PluginInput } from "@opencode-ai/plugin";
 import { QWEN_API_BASE_URL } from "./constants.js";
-import { debugLog } from "./logger.js";
+import { debugLog, warnLog } from "./logger.js";
 import { openBrowser } from "./browser.js";
 import { authorizeDevice, pollForToken } from "./oauth.js";
+import { Mutex } from "./mutex.js";
+
+// Mutex to prevent multiple concurrent authorization flows
+const authorizationMutex = new Mutex();
 
 export const QwenOAuthPlugin: Plugin = async ({
   project,
@@ -32,27 +36,36 @@ export const QwenOAuthPlugin: Plugin = async ({
           type: "oauth",
           label: "Qwen Code (qwen.ai OAuth)",
           authorize: async () => {
-            debugLog("Starting Qwen OAuth device flow...");
+            // Check if authorization is already in progress
+            if (authorizationMutex.isLocked()) {
+              warnLog("Authorization already in progress");
+              throw new Error(
+                "Authorization already in progress. Please wait for the current flow to complete.",
+              );
+            }
 
-            const device = await authorizeDevice();
-            const url =
-              device.verification_uri_complete || device.verification_uri;
+            return authorizationMutex.runExclusive(async () => {
+              debugLog("Starting Qwen OAuth device flow...");
 
-            // Try to open browser automatically
-            openBrowser(url);
+              const device = await authorizeDevice();
+              const url =
+                device.verification_uri_complete || device.verification_uri;
 
-            debugLog("Device authorization received", {
-              user_code: device.user_code,
-              verification_uri: device.verification_uri,
-              expires_in: device.expires_in,
-              interval: device.interval,
-            });
+              // Try to open browser automatically
+              openBrowser(url);
 
-            return {
-              url,
-              instructions: `Enter code: ${device.user_code}`,
-              method: "auto",
-              callback: async () => {
+              debugLog("Device authorization received", {
+                user_code: device.user_code,
+                verification_uri: device.verification_uri,
+                expires_in: device.expires_in,
+                interval: device.interval,
+              });
+
+              return {
+                url,
+                instructions: `Enter code: ${device.user_code}`,
+                method: "auto",
+                callback: async () => {
                 debugLog("Polling for OAuth token...");
                 const result = await pollForToken(
                   device.device_code,
@@ -78,6 +91,7 @@ export const QwenOAuthPlugin: Plugin = async ({
                 return { type: "failed", error: result.error! };
               },
             };
+            }); // End runExclusive
           },
         },
       ],

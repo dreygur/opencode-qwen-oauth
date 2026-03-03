@@ -10,7 +10,7 @@ import {
   QWEN_SCOPES,
 } from "./constants.js";
 import { createPkcePair } from "./pkce.js";
-import { debugLog } from "./logger.js";
+import { debugLog, warnLog } from "./logger.js";
 import { fetchWithRetry } from "./retry.js";
 import {
   DeviceFlowError,
@@ -28,6 +28,13 @@ import {
   validateOAuthError,
 } from "./validation.js";
 import { getConfig } from "./config.js";
+import { Mutex } from "./mutex.js";
+
+// Global mutex for token refresh to prevent race conditions
+const tokenRefreshMutex = new Mutex();
+
+// Track active polling operations
+const activePollingOperations = new Set<string>();
 
 export interface DeviceAuthorization {
   device_code: string;
@@ -153,12 +160,29 @@ export async function pollForToken(
     };
   }
 
+  // Prevent multiple concurrent polling for same device code
+  if (activePollingOperations.has(deviceCode)) {
+    warnLog("Polling already in progress for this device code", { deviceCode });
+    return {
+      success: false,
+      error: "Authorization already in progress",
+    };
+  }
+
+  // Register this polling operation
+  activePollingOperations.add(deviceCode);
+
   const timeoutMs = expiresIn * 1000;
   const startTime = Date.now();
   let currentInterval = intervalSeconds * 1000;
   let pollAttempts = 0;
 
   debugLog("Starting token polling", { timeoutMs, interval: currentInterval });
+
+  // Ensure cleanup on exit
+  const cleanup = () => {
+    activePollingOperations.delete(deviceCode);
+  };
 
   while (Date.now() - startTime < timeoutMs) {
     await new Promise((resolve) => setTimeout(resolve, currentInterval));
@@ -195,6 +219,7 @@ export async function pollForToken(
           debugLog("Invalid token response", {
             error: String(validationError),
           });
+          cleanup();
           return {
             success: false,
             error: "Received invalid token from server",
@@ -202,6 +227,7 @@ export async function pollForToken(
         }
 
         debugLog("Token received successfully", { pollAttempts });
+        cleanup();
         return {
           success: true,
           access_token: data.access_token,
@@ -229,6 +255,7 @@ export async function pollForToken(
 
       if (oauthError.error === "expired_token") {
         debugLog("Device code expired");
+        cleanup();
         return {
           success: false,
           error: "Device code expired. Please try again.",
@@ -237,6 +264,7 @@ export async function pollForToken(
 
       if (oauthError.error === "access_denied") {
         debugLog("User denied authorization");
+        cleanup();
         return {
           success: false,
           error: "Authorization was denied",
@@ -246,6 +274,7 @@ export async function pollForToken(
       debugLog(`Token polling failed: ${oauthError.error}`, {
         description: oauthError.error_description,
       });
+      cleanup();
       return {
         success: false,
         error: oauthError.error_description || oauthError.error,
@@ -258,6 +287,7 @@ export async function pollForToken(
         continue;
       }
       
+      cleanup();
       return {
         success: false,
         error: "Network error occurred during authentication",
@@ -266,11 +296,14 @@ export async function pollForToken(
   }
 
   debugLog("Polling timeout exceeded", { attempts: pollAttempts });
+  cleanup();
   return { success: false, error: "Polling timeout - device code expired" };
 }
 
 /**
  * Refresh an expired access token using a refresh token
+ * Uses mutex to prevent race conditions when multiple requests
+ * try to refresh the token simultaneously
  */
 export async function refreshAccessToken(
   refreshToken: string,
@@ -281,58 +314,66 @@ export async function refreshAccessToken(
   expires_in?: number;
   error?: string;
 }> {
-  try {
-    validateToken(refreshToken);
-  } catch (error) {
-    return {
-      success: false,
-      error: "Invalid refresh token",
-    };
-  }
+  // Use mutex to ensure only one refresh happens at a time
+  return tokenRefreshMutex.runExclusive(async () => {
+    try {
+      validateToken(refreshToken);
+    } catch (error) {
+      return {
+        success: false,
+        error: "Invalid refresh token",
+      };
+    }
 
-  const config = getConfig();
+    // Check if a refresh is already in progress
+    if (tokenRefreshMutex.isLocked()) {
+      debugLog("Token refresh already in progress, waiting...");
+    }
 
-  try {
-    const params = new URLSearchParams({
-      client_id: QWEN_CLIENT_ID,
-      grant_type: "refresh_token",
-      refresh_token: refreshToken,
-    });
+    const config = getConfig();
 
-    debugLog("Refreshing access token");
+    try {
+      const params = new URLSearchParams({
+        client_id: QWEN_CLIENT_ID,
+        grant_type: "refresh_token",
+        refresh_token: refreshToken,
+      });
 
-    const response = await fetchWithRetry(
-      `${QWEN_OAUTH_BASE_URL}${QWEN_TOKEN_ENDPOINT}`,
-      {
-        method: "POST",
-        headers: { "Content-Type": "application/x-www-form-urlencoded" },
-        body: params.toString(),
-      },
-      {
-        maxRetries: config.maxRetries,
-        timeout: config.timeout,
-      },
-    );
+      debugLog("Refreshing access token");
 
-    const data = (await response.json()) as TokenResponse;
+      const response = await fetchWithRetry(
+        `${QWEN_OAUTH_BASE_URL}${QWEN_TOKEN_ENDPOINT}`,
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/x-www-form-urlencoded" },
+          body: params.toString(),
+        },
+        {
+          maxRetries: config.maxRetries,
+          timeout: config.timeout,
+        },
+      );
 
-    // Validate new tokens
-    validateToken(data.access_token);
-    validateToken(data.refresh_token);
-    validateExpiresIn(data.expires_in);
+      const data = (await response.json()) as TokenResponse;
 
-    debugLog("Token refresh successful");
-    return {
-      success: true,
-      access_token: data.access_token,
-      refresh_token: data.refresh_token,
-      expires_in: data.expires_in,
-    };
-  } catch (error) {
-    debugLog("Token refresh failed", { error: String(error) });
-    return {
-      success: false,
-      error: error instanceof Error ? error.message : "Token refresh failed",
-    };
-  }
+      // Validate new tokens
+      validateToken(data.access_token);
+      validateToken(data.refresh_token);
+      validateExpiresIn(data.expires_in);
+
+      debugLog("Token refresh successful");
+      return {
+        success: true,
+        access_token: data.access_token,
+        refresh_token: data.refresh_token,
+        expires_in: data.expires_in,
+      };
+    } catch (error) {
+      debugLog("Token refresh failed", { error: String(error) });
+      return {
+        success: false,
+        error: error instanceof Error ? error.message : "Token refresh failed",
+      };
+    }
+  });
 }
