@@ -6,7 +6,7 @@
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
   "bin": {
-    "opencode-qwen-oauth": "./bin/install.js"
+    "opencode-qwen-oauth": "bin/install.js"
   },
   "files": [
     "dist",
@@ -33,7 +33,7 @@
   "license": "MIT",
   "repository": {
     "type": "git",
-    "url": "https://github.com/yourusername/opencode-qwen-oauth.git"
+    "url": "git+https://github.com/yourusername/opencode-qwen-oauth.git"
   },
   "bugs": {
     "url": "https://github.com/yourusername/opencode-qwen-oauth/issues"
