@@ -1,8 +1,13 @@
 # opencode-qwen-oauth
 
-[![npm version](https://img.shields.io/npm/v/opencode-qwen-oauth.svg)](https://www.npmjs.com/package/opencode-qwen-oauth)
-[![npm downloads](https://img.shields.io/npm/dm/opencode-qwen-oauth.svg)](https://www.npmjs.com/package/opencode-qwen-oauth)
-[![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
+[![npm version](https://img.shields.io/npm/v/opencode-qwen-oauth.svg?style=flat-square)](https://www.npmjs.com/package/opencode-qwen-oauth)
+[![npm downloads](https://img.shields.io/npm/dm/opencode-qwen-oauth.svg?style=flat-square)](https://www.npmjs.com/package/opencode-qwen-oauth)
+[![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg?style=flat-square)](LICENSE)
+[![CI Status](https://img.shields.io/github/actions/workflow/status/dreygur/opencode-qwen-oauth/ci.yml?branch=main&style=flat-square&label=CI)](https://github.com/dreygur/opencode-qwen-oauth/actions)
+[![Security Audit](https://img.shields.io/badge/security-audited-success?style=flat-square)](AUDIT.md)
+[![TypeScript](https://img.shields.io/badge/TypeScript-5.9-blue?style=flat-square&logo=typescript)](https://www.typescriptlang.org/)
+[![OpenCode](https://img.shields.io/badge/OpenCode-Plugin-purple?style=flat-square)](https://opencode.ai)
+[![Qwen](https://img.shields.io/badge/Qwen.ai-OAuth-red?style=flat-square)](https://qwen.ai)
 
 Qwen OAuth authentication plugin for [OpenCode](https://opencode.ai) - authenticate with Qwen.ai using OAuth device flow (PKCE).
 
