@@ -1,0 +1,30 @@
+# Source files (compiled to dist/)
+src/
+
+# Development
+node_modules/
+*.log
+.DS_Store
+Thumbs.db
+
+# Config files not needed in package
+tsconfig.json
+.eslintrc*
+.prettierrc*
+.editorconfig
+.gitignore
+.github/
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# Local testing
+.opencode/
+packages/
+
+# Environment
+.env
+.env.local

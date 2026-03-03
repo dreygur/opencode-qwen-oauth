@@ -1,0 +1,29 @@
+# Local testing directory (not part of npm package)
+.opencode/
+
+# Build output
+dist/
+
+# Dependencies
+node_modules/
+
+# Lock files (keep package-lock.json for reproducibility)
+# package-lock.json
+
+# Logs
+*.log
+logs/
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# Environment
+.env
+.env.local
