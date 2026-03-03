@@ -1,7 +1,7 @@
 /**
  * Qwen OAuth Plugin for OpenCode
  * Provides OAuth device flow authentication for Qwen.ai
- * 
+ *
  * @packageDocumentation
  */
 
@@ -54,14 +54,13 @@ function writeLog(message: string): void {
   }
 }
 
-const DEBUG = process.env.QWEN_OAUTH_DEBUG === "true" || process.env.QWEN_OAUTH_DEBUG === "1";
+const DEBUG =
+  process.env.QWEN_OAUTH_DEBUG === "true" ||
+  process.env.QWEN_OAUTH_DEBUG === "1";
 
 function debugLog(message: string, data?: Record<string, unknown>): void {
   const logMessage = data ? `${message} ${JSON.stringify(data)}` : message;
   writeLog(logMessage);
-  if (DEBUG) {
-    console.log(`[Qwen OAuth] ${message}`, data ? JSON.stringify(data, null, 2) : "");
-  }
 }
 
 // ============================================
@@ -78,7 +77,9 @@ function base64UrlEncode(buffer: Buffer): string {
 
 function createPkcePair(): { verifier: string; challenge: string } {
   const verifier = base64UrlEncode(randomBytes(32));
-  const challenge = base64UrlEncode(createHash("sha256").update(verifier).digest());
+  const challenge = base64UrlEncode(
+    createHash("sha256").update(verifier).digest(),
+  );
   return { verifier, challenge };
 }
 
@@ -93,12 +94,10 @@ function openBrowser(url: string): void {
       platform === "darwin"
         ? "open"
         : platform === "win32"
-        ? "rundll32"
-        : "xdg-open";
+          ? "rundll32"
+          : "xdg-open";
     const args =
-      platform === "win32"
-        ? ["url.dll,FileProtocolHandler", url]
-        : [url];
+      platform === "win32" ? ["url.dll,FileProtocolHandler", url] : [url];
     const child = spawn(command, args, {
       stdio: "ignore",
       detached: true,
@@ -154,7 +153,7 @@ async function authorizeDevice(): Promise<DeviceAuthorization> {
       method: "POST",
       headers: { "Content-Type": "application/x-www-form-urlencoded" },
       body: params.toString(),
-    }
+    },
   );
 
   if (!response.ok) {
@@ -177,8 +176,14 @@ async function pollForToken(
   deviceCode: string,
   codeVerifier: string,
   intervalSeconds: number,
-  expiresIn: number
-): Promise<{ success: boolean; access_token?: string; refresh_token?: string; expires_in?: number; error?: string }> {
+  expiresIn: number,
+): Promise<{
+  success: boolean;
+  access_token?: string;
+  refresh_token?: string;
+  expires_in?: number;
+  error?: string;
+}> {
   const timeoutMs = expiresIn * 1000;
   const startTime = Date.now();
   let currentInterval = intervalSeconds * 1000;
@@ -197,11 +202,14 @@ async function pollForToken(
 
     debugLog("Polling for token...");
 
-    const response = await fetch(`${QWEN_OAUTH_BASE_URL}${QWEN_TOKEN_ENDPOINT}`, {
-      method: "POST",
-      headers: { "Content-Type": "application/x-www-form-urlencoded" },
-      body: params.toString(),
-    });
+    const response = await fetch(
+      `${QWEN_OAUTH_BASE_URL}${QWEN_TOKEN_ENDPOINT}`,
+      {
+        method: "POST",
+        headers: { "Content-Type": "application/x-www-form-urlencoded" },
+        body: params.toString(),
+      },
+    );
 
     if (response.ok) {
       const data = (await response.json()) as TokenResponse;
@@ -226,17 +234,27 @@ async function pollForToken(
 
     if (error.error === "slow_down") {
       currentInterval += 5000;
-      debugLog("Server requested slow down, new interval:", { interval: currentInterval });
+      debugLog("Server requested slow down, new interval:", {
+        interval: currentInterval,
+      });
       continue;
     }
 
     if (error.error === "expired_token") {
       debugLog("Device code expired");
-      return { success: false, error: "Device code expired. Please try again." };
+      return {
+        success: false,
+        error: "Device code expired. Please try again.",
+      };
     }
 
-    debugLog(`Token polling failed: ${error.error_description || "unknown error"}`);
-    return { success: false, error: error.error_description || "Authentication failed" };
+    debugLog(
+      `Token polling failed: ${error.error_description || "unknown error"}`,
+    );
+    return {
+      success: false,
+      error: error.error_description || "Authentication failed",
+    };
   }
 
   debugLog("Polling timeout exceeded");
@@ -247,8 +265,18 @@ async function pollForToken(
 // Plugin
 // ============================================
 
-export const QwenOAuthPlugin: Plugin = async ({ project, client, $, directory, worktree }: PluginInput) => {
-  debugLog("Plugin initialized", { directory, worktree, project: (project as any)?.name || "N/A" });
+export const QwenOAuthPlugin: Plugin = async ({
+  project,
+  client,
+  $,
+  directory,
+  worktree,
+}: PluginInput) => {
+  debugLog("Plugin initialized", {
+    directory,
+    worktree,
+    project: (project as any)?.name || "N/A",
+  });
 
   return {
     auth: {
@@ -261,7 +289,8 @@ export const QwenOAuthPlugin: Plugin = async ({ project, client, $, directory, w
             debugLog("Starting Qwen OAuth device flow...");
 
             const device = await authorizeDevice();
-            const url = device.verification_uri_complete || device.verification_uri;
+            const url =
+              device.verification_uri_complete || device.verification_uri;
 
             // Try to open browser automatically
             openBrowser(url);
@@ -273,10 +302,6 @@ export const QwenOAuthPlugin: Plugin = async ({ project, client, $, directory, w
               interval: device.interval,
             });
 
-            // Show essential info to user
-            console.log(`\n📱 Qwen OAuth: Visit ${url}`);
-            console.log(`🔑 Enter code: ${device.user_code}\n`);
-
             return {
               url,
               instructions: `Enter code: ${device.user_code}`,
@@ -287,7 +312,7 @@ export const QwenOAuthPlugin: Plugin = async ({ project, client, $, directory, w
                   device.device_code,
                   device.verifier,
                   device.interval,
-                  device.expires_in
+                  device.expires_in,
                 );
 
                 if (result.success) {
@@ -312,7 +337,10 @@ export const QwenOAuthPlugin: Plugin = async ({ project, client, $, directory, w
       ],
     },
     config: async (config: Record<string, unknown>) => {
-      const providers = (config.provider as Record<string, unknown> & { [key: string]: unknown }) || {};
+      const providers =
+        (config.provider as Record<string, unknown> & {
+          [key: string]: unknown;
+        }) || {};
       config.provider = providers;
       providers["qwen"] = {
         npm: "@ai-sdk/openai-compatible",

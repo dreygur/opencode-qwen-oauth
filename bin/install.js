@@ -2,13 +2,19 @@
 
 /**
  * Qwen OAuth Plugin Installer
- * 
+ *
  * Usage:
  *   npx opencode-qwen-oauth install
  *   bunx opencode-qwen-oauth install
  */
 
-import { readFileSync, writeFileSync, existsSync, mkdirSync, appendFileSync } from "node:fs";
+import {
+  readFileSync,
+  writeFileSync,
+  existsSync,
+  mkdirSync,
+  appendFileSync,
+} from "node:fs";
 import { join } from "node:path";
 import { homedir } from "node:os";
 
@@ -64,8 +70,12 @@ function install() {
   ensureDir(opencodeDir);
 
   // Read or create config
-  let config = { "$schema": "https://opencode.ai/config.json", plugin: [], provider: {} };
-  
+  let config = {
+    $schema: "https://opencode.ai/config.json",
+    plugin: [],
+    provider: {},
+  };
+
   if (existsSync(configPath)) {
     try {
       const content = readFileSync(configPath, "utf-8");
@@ -123,7 +133,7 @@ function install() {
   // Install npm package in .opencode
   const opencodePackagePath = join(opencodeDir, "package.json");
   let opencodePackage = { dependencies: {} };
-  
+
   if (existsSync(opencodePackagePath)) {
     try {
       opencodePackage = JSON.parse(readFileSync(opencodePackagePath, "utf-8"));
@@ -139,18 +149,22 @@ function install() {
   }
 
   try {
-    writeFileSync(opencodePackagePath, JSON.stringify(opencodePackage, null, 2) + "\n", "utf-8");
+    writeFileSync(
+      opencodePackagePath,
+      JSON.stringify(opencodePackage, null, 2) + "\n",
+      "utf-8",
+    );
   } catch (e) {
     error(`Failed to write package.json: ${e.message}`);
     process.exit(1);
   }
 
-  log("\n✅ Installation complete!");
-  log("\nNext steps:");
-  log("  1. Run: opencode");
-  log("  2. Connect: /connect (select 'Qwen Code (qwen.ai OAuth)')");
-  log("  3. Use model: /model qwen/qwen3-coder-plus");
-  log("\nDebug mode: QWEN_OAUTH_DEBUG=true opencode");
+  log("Installation complete!");
+  log("Next steps:");
+  log("1. Run: opencode");
+  log("2. Connect: /connect (select 'Qwen Code (qwen.ai OAuth)')");
+  log("3. Use model: /model qwen/qwen3-coder-plus");
+  log("Debug mode: QWEN_OAUTH_DEBUG=true opencode");
 }
 
 // ============================================
@@ -161,7 +175,7 @@ function uninstall() {
   log("Uninstalling Qwen OAuth plugin...");
 
   const configPath = getOpencodeConfigPath();
-  
+
   if (!existsSync(configPath)) {
     log("No config file found, nothing to uninstall");
     return;
@@ -198,9 +212,9 @@ function uninstall() {
     process.exit(1);
   }
 
-  log("\n✅ Uninstallation complete!");
+  log("Uninstallation complete!");
   log("Note: You may want to manually remove the npm package:");
-  log("  npm uninstall opencode-qwen-auth");
+  log("npm uninstall opencode-qwen-auth");
 }
 
 // ============================================
