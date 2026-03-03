@@ -4,23 +4,72 @@
 
 import { spawn } from "node:child_process";
 
+/**
+ * Opens a URL in the default browser
+ * Supports macOS, Windows, and Linux with fallback mechanisms
+ */
 export function openBrowser(url: string): void {
   try {
     const platform = process.platform;
-    const command =
-      platform === "darwin"
-        ? "open"
-        : platform === "win32"
-          ? "rundll32"
-          : "xdg-open";
-    const args =
-      platform === "win32" ? ["url.dll,FileProtocolHandler", url] : [url];
+    
+    let command: string;
+    let args: string[];
+
+    if (platform === "darwin") {
+      // macOS
+      command = "open";
+      args = [url];
+    } else if (platform === "win32") {
+      // Windows
+      command = "rundll32";
+      args = ["url.dll,FileProtocolHandler", url];
+    } else {
+      // Linux and other Unix-like systems
+      // Try xdg-open first, with fallbacks
+      command = "xdg-open";
+      args = [url];
+      
+      // Check if xdg-open exists, if not try common browsers
+      const child = spawn(command, args, {
+        stdio: "ignore",
+        detached: true,
+      });
+      
+      child.on("error", (error) => {
+        // xdg-open failed, try common Linux browsers
+        const browsers = [
+          "google-chrome",
+          "firefox",
+          "chromium",
+          "brave-browser",
+          "microsoft-edge",
+        ];
+        
+        for (const browser of browsers) {
+          try {
+            const browserChild = spawn(browser, [url], {
+              stdio: "ignore",
+              detached: true,
+            });
+            browserChild.unref?.();
+            return; // Success, exit
+          } catch {
+            // Try next browser
+            continue;
+          }
+        }
+      });
+      
+      child.unref?.();
+      return;
+    }
+
     const child = spawn(command, args, {
       stdio: "ignore",
       detached: true,
     });
     child.unref?.();
-  } catch {
-    // Ignore errors
+  } catch (error) {
+    // Silently fail - user can manually open the URL
   }
 }

@@ -14,6 +14,10 @@ Qwen OAuth authentication plugin for [OpenCode](https://opencode.ai) - authentic
 - 📝 **File Logging** - All OAuth activity logged to `~/.config/opencode/logs/qwen-oauth.log`
 - 🐛 **Debug Mode** - Enable verbose output with `QWEN_OAUTH_DEBUG=true`
 - 🚀 **Easy Install** - One-command installation with CLI tool
+- 🎯 **Custom Headers** - Automatically adds Qwen-specific headers to API requests
+- ⚙️ **Optimized Parameters** - Pre-configured temperature and topP settings for Qwen models
+- 🌍 **Environment Variables** - Exposes Qwen credentials to shell environments
+- 📊 **Event Monitoring** - Tracks authentication and session events for debugging
 
 ## Quick Start
 
@@ -139,6 +143,25 @@ Use the CLI directly:
 opencode auth login qwen
 ```
 
+### Browser doesn't open automatically (Linux)
+The plugin tries multiple methods to open your browser:
+1. First tries `xdg-open` (standard Linux)
+2. Falls back to: `google-chrome`, `firefox`, `chromium`, `brave-browser`, `microsoft-edge`
+
+If none work, manually copy the URL shown in the terminal and open it in your browser.
+
+To ensure browser opening works, install `xdg-utils`:
+```bash
+# Ubuntu/Debian
+sudo apt install xdg-utils
+
+# Fedora/RHEL
+sudo dnf install xdg-utils
+
+# Arch Linux
+sudo pacman -S xdg-utils
+```
+
 ### Check logs
 ```bash
 cat ~/.config/opencode/logs/qwen-oauth.log
@@ -181,12 +204,47 @@ cd /path/to/project
 opencode-qwen-oauth install
 ```
 
+## Plugin Architecture
+
+This plugin implements multiple OpenCode plugin hooks:
+
+### Hooks Implemented
+
+#### `auth` Hook
+Provides OAuth device flow authentication with automatic browser opening and token polling.
+
+#### `config` Hook  
+Dynamically registers the Qwen provider and available models with OpenCode.
+
+#### `event` Hook
+Monitors session events (creation, errors) for debugging and logging.
+
+#### `chat.headers` Hook
+Injects custom headers for Qwen API requests:
+- `X-Qwen-Client: OpenCode`
+- `X-Qwen-Plugin-Version: 1.1.0`
+
+#### `chat.params` Hook
+Optimizes model parameters for Qwen:
+- Temperature: `0.7` (default)
+- Top P: `0.95` (default)
+
+#### `shell.env` Hook
+Exposes environment variables to shell commands:
+- `QWEN_API_BASE_URL` - Qwen API endpoint
+- `QWEN_PROVIDER` - Provider identifier
+
 ## Project Structure
 
 ```
 opencode-qwen-oauth/
 ├── src/                  # TypeScript source files
-│   └── index.ts          # Main plugin implementation
+│   ├── index.ts          # Main plugin with hooks
+│   ├── oauth.ts          # OAuth device flow logic
+│   ├── pkce.ts           # PKCE implementation
+│   ├── browser.ts        # Browser opening utility
+│   ├── logger.ts         # Logging utilities
+│   └── constants.ts      # API constants
 ├── bin/                  # CLI scripts
 │   └── install.js        # Installer script
 ├── dist/                 # Compiled JavaScript (generated)

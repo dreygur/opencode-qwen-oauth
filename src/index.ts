@@ -107,6 +107,71 @@ export const QwenOAuthPlugin: Plugin = async ({
         },
       };
     },
+
+    // Event monitoring hook
+    event: async ({ event }) => {
+      // Log important events for debugging
+      if (event.type === "session.error") {
+        debugLog("Session error occurred", {
+          type: event.type,
+          timestamp: new Date().toISOString(),
+        });
+      }
+
+      if (event.type === "session.created") {
+        debugLog("New session created", {
+          type: event.type,
+          timestamp: new Date().toISOString(),
+        });
+      }
+    },
+
+    // Inject custom headers for Qwen API requests
+    "chat.headers": async (input, output) => {
+      // Only add headers for Qwen provider
+      if (input.provider.info.id === "qwen") {
+        debugLog("Adding custom headers for Qwen request", {
+          model: input.model.id,
+          session: input.sessionID,
+        });
+
+        // Add any custom headers needed for Qwen
+        // OpenCode will automatically handle the Authorization header
+        output.headers["X-Qwen-Client"] = "OpenCode";
+        output.headers["X-Qwen-Plugin-Version"] = "1.1.0";
+      }
+    },
+
+    // Customize model parameters for Qwen
+    "chat.params": async (input, output) => {
+      if (input.provider.info.id === "qwen") {
+        debugLog("Customizing parameters for Qwen model", {
+          model: input.model.id,
+          current_temp: output.temperature,
+        });
+
+        // Qwen models work well with these defaults
+        // Users can override these in their config
+        if (output.temperature === undefined) {
+          output.temperature = 0.7;
+        }
+        if (output.topP === undefined) {
+          output.topP = 0.95;
+        }
+      }
+    },
+
+    // Expose Qwen credentials as environment variables if needed
+    "shell.env": async (input, output) => {
+      debugLog("Setting up shell environment", {
+        cwd: input.cwd,
+        hasSession: !!input.sessionID,
+      });
+
+      // Add Qwen-specific environment variables
+      output.env.QWEN_API_BASE_URL = QWEN_API_BASE_URL;
+      output.env.QWEN_PROVIDER = "qwen";
+    },
   };
 };
 
