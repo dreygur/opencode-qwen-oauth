@@ -22,6 +22,7 @@ import {
   validateDeviceCode,
   validateUserCode,
   validateToken,
+  validateTokenType,
   validateExpiresIn,
   validateInterval,
   validateQwenUrl,
@@ -57,8 +58,10 @@ interface DeviceCodeResponse {
 
 interface TokenResponse {
   access_token: string;
-  refresh_token: string;
+  token_type: string;
   expires_in: number;
+  refresh_token?: string; // Optional per RFC 6749 - may not be returned on refresh
+  scope?: string;
 }
 
 export async function authorizeDevice(): Promise<DeviceAuthorization> {
@@ -213,8 +216,16 @@ export async function pollForToken(
         // Validate token response
         try {
           validateToken(data.access_token);
+          // For device flow, refresh_token is required on initial auth
+          if (!data.refresh_token) {
+            throw new Error("No refresh token returned");
+          }
           validateToken(data.refresh_token);
           validateExpiresIn(data.expires_in);
+          // Validate token_type if provided (optional for compatibility)
+          if (data.token_type) {
+            validateTokenType(data.token_type);
+          }
         } catch (validationError) {
           debugLog("Invalid token response", {
             error: String(validationError),
@@ -354,18 +365,60 @@ export async function refreshAccessToken(
         },
       );
 
+      // Check for OAuth error responses
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({}));
+        const oauthError = validateOAuthError(errorData);
+        
+        debugLog("OAuth error during token refresh", {
+          error: oauthError.error,
+          description: oauthError.error_description,
+        });
+        
+        // Handle specific OAuth errors
+        if (oauthError.error === "invalid_grant") {
+          return {
+            success: false,
+            error: "Invalid refresh token or client_id",
+          };
+        }
+        
+        if (oauthError.error === "invalid_client") {
+          return {
+            success: false,
+            error: "Invalid client_id",
+          };
+        }
+        
+        return {
+          success: false,
+          error: oauthError.error_description || oauthError.error || "Token refresh failed",
+        };
+      }
+
       const data = (await response.json()) as TokenResponse;
 
       // Validate new tokens
       validateToken(data.access_token);
-      validateToken(data.refresh_token);
       validateExpiresIn(data.expires_in);
+      
+      // Validate token_type if provided (optional for compatibility)
+      if (data.token_type) {
+        validateTokenType(data.token_type);
+      }
+      
+      // Per RFC 6749: refresh_token is optional in refresh response
+      // If not provided, continue using the old refresh token
+      const newRefreshToken = data.refresh_token || refreshToken;
+      validateToken(newRefreshToken);
 
-      debugLog("Token refresh successful");
+      debugLog("Token refresh successful", {
+        new_refresh_token: !!data.refresh_token,
+      });
       return {
         success: true,
         access_token: data.access_token,
-        refresh_token: data.refresh_token,
+        refresh_token: newRefreshToken,
         expires_in: data.expires_in,
       };
     } catch (error) {

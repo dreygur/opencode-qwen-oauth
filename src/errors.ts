@@ -80,6 +80,18 @@ export class DeviceFlowError extends QwenAuthError {
   }
 }
 
+export class QwenTokenRefreshError extends QwenAuthError {
+  constructor(message: string) {
+    super(
+      message,
+      "TOKEN_REFRESH_ERROR",
+      false,
+      "Failed to refresh access token. Please re-authenticate.",
+    );
+    this.name = "QwenTokenRefreshError";
+  }
+}
+
 /**
  * Type guard to check if error is recoverable
  */

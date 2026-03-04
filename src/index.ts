@@ -9,8 +9,9 @@ import type { Plugin, PluginInput } from "@opencode-ai/plugin";
 import { QWEN_API_BASE_URL } from "./constants.js";
 import { debugLog, warnLog } from "./logger.js";
 import { openBrowser } from "./browser.js";
-import { authorizeDevice, pollForToken } from "./oauth.js";
+import { authorizeDevice, pollForToken, refreshAccessToken } from "./oauth.js";
 import { Mutex } from "./mutex.js";
+import { QwenTokenRefreshError } from "./errors.js";
 
 // Mutex to prevent multiple concurrent authorization flows
 const authorizationMutex = new Mutex();
@@ -92,6 +93,30 @@ export const QwenOAuthPlugin: Plugin = async ({
               },
             };
             }); // End runExclusive
+          },
+          refresh: async (refreshToken: string) => {
+            debugLog("Refreshing Qwen access token...");
+            
+            const result = await refreshAccessToken(refreshToken);
+            
+            if (result.success) {
+              debugLog("Token refresh successful", {
+                expires_in: result.expires_in,
+                has_refresh: !!result.refresh_token,
+              });
+              
+              return {
+                type: "success",
+                access: result.access_token!,
+                refresh: result.refresh_token!,
+                expires: Date.now() + result.expires_in! * 1000,
+              };
+            }
+            
+            debugLog(`Token refresh failed: ${result.error}`);
+            throw new QwenTokenRefreshError(
+              result.error || "Invalid refresh token or client_id"
+            );
           },
         },
       ],

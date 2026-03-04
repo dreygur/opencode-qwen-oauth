@@ -59,6 +59,22 @@ export function validateToken(token: string): void {
 }
 
 /**
+ * Validate token type (per RFC 6749)
+ */
+export function validateTokenType(tokenType: string): void {
+  if (!tokenType || typeof tokenType !== "string") {
+    throw new ValidationError("token_type must be a non-empty string", "token_type");
+  }
+  // Common token types: Bearer, MAC, etc.
+  // Per RFC 6749, token_type is case-insensitive
+  const normalizedType = tokenType.toLowerCase();
+  if (normalizedType !== "bearer" && normalizedType !== "mac") {
+    // Log warning but don't fail - allow other token types
+    // as the spec allows for extensions
+  }
+}
+
+/**
  * Validate expires_in value
  */
 export function validateExpiresIn(expiresIn: number): void {
@@ -121,16 +137,23 @@ export function sanitizeLogData(data: any): any {
 
 /**
  * Validate OAuth error response
+ * Returns a safe error object even if the response is malformed
  */
 export function validateOAuthError(error: any): {
   error: string;
   error_description?: string;
 } {
   if (!error || typeof error !== "object") {
-    throw new ValidationError("Invalid OAuth error response");
+    return {
+      error: "unknown_error",
+      error_description: "Server returned invalid error response",
+    };
   }
   if (!error.error || typeof error.error !== "string") {
-    throw new ValidationError("OAuth error must have an error field");
+    return {
+      error: "unknown_error",
+      error_description: error.message || "Server returned malformed error response",
+    };
   }
   return {
     error: error.error,
