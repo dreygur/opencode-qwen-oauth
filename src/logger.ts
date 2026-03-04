@@ -51,6 +51,15 @@ function getCurrentLogLevel(): LogLevel {
 
 function writeLog(level: LogLevel, message: string, data?: any): void {
   try {
+    // Only proceed if debug logging is explicitly enabled
+    const isDebugEnabled = process.env.QWEN_OAUTH_DEBUG === "true" || 
+                          process.env.QWEN_OAUTH_DEBUG === "1";
+    
+    // Only write to file when debug is explicitly enabled
+    if (!isDebugEnabled) {
+      return; // Don't write logs to file unless explicitly enabled
+    }
+
     const currentLevel = getCurrentLogLevel();
     if (level < currentLevel) {
       return; // Skip logs below current level

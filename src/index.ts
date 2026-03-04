@@ -1,9 +1,14 @@
 /**
  * Qwen OAuth Plugin for OpenCode
  * Provides OAuth device flow authentication for Qwen.ai
+ * With proactive token refresh via custom fetch loader
  *
  * @packageDocumentation
  */
+
+const PLUGIN_VERSION = "2.2.0";
+
+type RequestInfoType = Request | URL | string;
 
 import type { Plugin, PluginInput } from "@opencode-ai/plugin";
 import { QWEN_API_BASE_URL } from "./constants.js";
@@ -11,15 +16,25 @@ import { debugLog, warnLog } from "./logger.js";
 import { openBrowser } from "./browser.js";
 import { authorizeDevice, pollForToken, refreshAccessToken } from "./oauth.js";
 import { Mutex } from "./mutex.js";
-import { QwenTokenRefreshError } from "./errors.js";
+import { getConfig } from "./config.js";
 
-// Mutex to prevent multiple concurrent authorization flows
+interface OAuthAuthDetails {
+  type: "oauth";
+  refresh: string;
+  access: string;
+  expires?: number;
+}
+
 const authorizationMutex = new Mutex();
+const tokenRefreshMutex = new Mutex();
+
+let cachedAuth: OAuthAuthDetails | null = null;
+
+type GetAuth = () => Promise<any>;
 
 export const QwenOAuthPlugin: Plugin = async ({
   project,
   client,
-  $,
   directory,
   worktree,
 }: PluginInput) => {
@@ -29,15 +44,177 @@ export const QwenOAuthPlugin: Plugin = async ({
     project: (project as any)?.name || "N/A",
   });
 
+  const config = getConfig();
+
   return {
     auth: {
       provider: "qwen",
+      async loader(getAuth: GetAuth, provider) {
+        const auth = await getAuth();
+        
+        if (!auth || auth.type !== "oauth") {
+          return {};
+        }
+
+        cachedAuth = auth;
+
+        const refreshTokenIfNeeded = async (): Promise<OAuthAuthDetails> => {
+          if (!cachedAuth) {
+            throw new Error("No authentication available");
+          }
+
+          const now = Date.now();
+          const expiresAt = cachedAuth.expires || 0;
+          const timeUntilExpiry = expiresAt - now;
+          
+          const shouldRefresh = 
+            !cachedAuth.access ||
+            timeUntilExpiry < config.refreshThreshold;
+
+          if (!shouldRefresh) {
+            return cachedAuth;
+          }
+
+          debugLog("Token refresh needed", {
+            hasAccess: !!cachedAuth.access,
+            expiresAt: new Date(expiresAt).toISOString(),
+            timeUntilExpiry,
+            refreshThreshold: config.refreshThreshold,
+          });
+
+          return tokenRefreshMutex.runExclusive(async () => {
+            const currentAuth = cachedAuth;
+            if (!currentAuth || !currentAuth.refresh) {
+              throw new Error("No refresh token available");
+            }
+
+            const result = await refreshAccessToken(currentAuth.refresh);
+
+            if (result.success && result.access_token) {
+              const newAuth: OAuthAuthDetails = {
+                type: "oauth",
+                refresh: result.refresh_token || currentAuth.refresh,
+                access: result.access_token,
+                expires: Date.now() + (result.expires_in || 0) * 1000,
+              };
+
+              cachedAuth = newAuth;
+
+              try {
+                await client.auth.set({
+                  path: { id: "qwen" },
+                  body: newAuth as any,
+                });
+                debugLog("Token refreshed and stored", {
+                  expires: newAuth.expires,
+                });
+              } catch (storeError) {
+                debugLog("Failed to store refreshed token", {
+                  error: String(storeError),
+                });
+              }
+
+              return newAuth;
+            }
+
+            debugLog("Token refresh failed", { error: result.error });
+            throw new Error(result.error || "Token refresh failed");
+          });
+        };
+
+        return {
+          apiKey: "",
+          async fetch(
+            input: RequestInfoType,
+            init?: RequestInit,
+          ): Promise<Response> {
+            let auth = await refreshTokenIfNeeded();
+            const maxRetries = 2;
+            let lastResponse: Response | null = null;
+
+            for (let attempt = 0; attempt <= maxRetries; attempt++) {
+              let url: string;
+              if (typeof input === "string") {
+                url = input;
+              } else if (input instanceof URL) {
+                url = input.toString();
+              } else {
+                url = (input as Request).url;
+              }
+
+              const headers = new Headers(init?.headers);
+              if (auth.access) {
+                headers.set("Authorization", `Bearer ${auth.access}`);
+              }
+
+              const response = await fetch(url, {
+                ...init,
+                headers,
+              });
+
+              lastResponse = response;
+
+              if (response.status === 401 && attempt < maxRetries) {
+                debugLog("Received 401, attempting token refresh", { attempt });
+
+                const refreshedAuth = await tokenRefreshMutex.runExclusive(async () => {
+                  const currentAuth = cachedAuth;
+                  if (!currentAuth || !currentAuth.refresh) {
+                    throw new Error("No refresh token available");
+                  }
+
+                  const result = await refreshAccessToken(currentAuth.refresh);
+
+                  if (result.success && result.access_token) {
+                    const newAuth: OAuthAuthDetails = {
+                      type: "oauth",
+                      refresh: result.refresh_token || currentAuth.refresh,
+                      access: result.access_token,
+                      expires: Date.now() + (result.expires_in || 0) * 1000,
+                    };
+
+                    cachedAuth = newAuth;
+
+                    try {
+                      await client.auth.set({
+                        path: { id: "qwen" },
+                        body: newAuth as any,
+                      });
+                    } catch (storeError) {
+                      debugLog("Failed to store refreshed token after 401", {
+                        error: String(storeError),
+                      });
+                    }
+
+                    return newAuth;
+                  }
+
+                  debugLog("Token refresh failed after 401", { error: result.error });
+                  return null;
+                });
+
+                if (refreshedAuth) {
+                  auth = refreshedAuth;
+                  debugLog("Retrying request with refreshed token", { attempt: attempt + 1 });
+                  continue;
+                } else {
+                  debugLog("Token refresh failed, returning 401");
+                  break;
+                }
+              }
+
+              return response;
+            }
+
+            return lastResponse!;
+          },
+        };
+      },
       methods: [
         {
           type: "oauth",
           label: "Qwen Code (qwen.ai OAuth)",
           authorize: async () => {
-            // Check if authorization is already in progress
             if (authorizationMutex.isLocked()) {
               warnLog("Authorization already in progress");
               throw new Error(
@@ -52,7 +229,6 @@ export const QwenOAuthPlugin: Plugin = async ({
               const url =
                 device.verification_uri_complete || device.verification_uri;
 
-              // Try to open browser automatically
               openBrowser(url);
 
               debugLog("Device authorization received", {
@@ -67,56 +243,42 @@ export const QwenOAuthPlugin: Plugin = async ({
                 instructions: `Enter code: ${device.user_code}`,
                 method: "auto",
                 callback: async () => {
-                debugLog("Polling for OAuth token...");
-                const result = await pollForToken(
-                  device.device_code,
-                  device.verifier,
-                  device.interval,
-                  device.expires_in,
-                );
+                  debugLog("Polling for OAuth token...");
+                  const result = await pollForToken(
+                    device.device_code,
+                    device.verifier,
+                    device.interval,
+                    device.expires_in,
+                  );
 
-                if (result.success) {
-                  debugLog("Qwen authentication successful!", {
-                    expires_in: result.expires_in,
-                    has_refresh: !!result.refresh_token,
-                  });
-                  return {
-                    type: "success",
-                    access: result.access_token!,
-                    refresh: result.refresh_token!,
-                    expires: Date.now() + result.expires_in! * 1000,
-                  };
-                }
+                  if (result.success) {
+                    const authResult: OAuthAuthDetails = {
+                      type: "oauth",
+                      refresh: result.refresh_token!,
+                      access: result.access_token || "",
+                      expires: Date.now() + (result.expires_in || 0) * 1000,
+                    };
 
-                debugLog(`Authentication failed: ${result.error}`);
-                return { type: "failed", error: result.error! };
-              },
-            };
-            }); // End runExclusive
-          },
-          refresh: async (refreshToken: string) => {
-            debugLog("Refreshing Qwen access token...");
-            
-            const result = await refreshAccessToken(refreshToken);
-            
-            if (result.success) {
-              debugLog("Token refresh successful", {
-                expires_in: result.expires_in,
-                has_refresh: !!result.refresh_token,
-              });
-              
-              return {
-                type: "success",
-                access: result.access_token!,
-                refresh: result.refresh_token!,
-                expires: Date.now() + result.expires_in! * 1000,
+                    cachedAuth = authResult;
+
+                    debugLog("Qwen authentication successful!", {
+                      expires_in: result.expires_in,
+                      has_refresh: !!result.refresh_token,
+                    });
+
+                    return {
+                      type: "success",
+                      refresh: result.refresh_token!,
+                      access: result.access_token!,
+                      expires: Date.now() + result.expires_in! * 1000,
+                    };
+                  }
+
+                  debugLog(`Authentication failed: ${result.error}`);
+                  return { type: "failed", error: result.error! };
+                },
               };
-            }
-            
-            debugLog(`Token refresh failed: ${result.error}`);
-            throw new QwenTokenRefreshError(
-              result.error || "Invalid refresh token or client_id"
-            );
+            });
           },
         },
       ],
@@ -147,9 +309,7 @@ export const QwenOAuthPlugin: Plugin = async ({
       };
     },
 
-    // Event monitoring hook
     event: async ({ event }) => {
-      // Log important events for debugging
       if (event.type === "session.error") {
         debugLog("Session error occurred", {
           type: event.type,
@@ -165,23 +325,18 @@ export const QwenOAuthPlugin: Plugin = async ({
       }
     },
 
-    // Inject custom headers for Qwen API requests
     "chat.headers": async (input, output) => {
-      // Only add headers for Qwen provider
       if (input.provider.info.id === "qwen") {
         debugLog("Adding custom headers for Qwen request", {
           model: input.model.id,
           session: input.sessionID,
         });
 
-        // Add any custom headers needed for Qwen
-        // OpenCode will automatically handle the Authorization header
         output.headers["X-Qwen-Client"] = "OpenCode";
-        output.headers["X-Qwen-Plugin-Version"] = "1.1.0";
+        output.headers["X-Qwen-Plugin-Version"] = PLUGIN_VERSION;
       }
     },
 
-    // Customize model parameters for Qwen
     "chat.params": async (input, output) => {
       if (input.provider.info.id === "qwen") {
         debugLog("Customizing parameters for Qwen model", {
@@ -189,8 +344,6 @@ export const QwenOAuthPlugin: Plugin = async ({
           current_temp: output.temperature,
         });
 
-        // Qwen models work well with these defaults
-        // Users can override these in their config
         if (output.temperature === undefined) {
           output.temperature = 0.7;
         }
@@ -200,14 +353,12 @@ export const QwenOAuthPlugin: Plugin = async ({
       }
     },
 
-    // Expose Qwen credentials as environment variables if needed
     "shell.env": async (input, output) => {
       debugLog("Setting up shell environment", {
         cwd: input.cwd,
         hasSession: !!input.sessionID,
       });
 
-      // Add Qwen-specific environment variables
       output.env.QWEN_API_BASE_URL = QWEN_API_BASE_URL;
       output.env.QWEN_PROVIDER = "qwen";
     },
