@@ -53,8 +53,13 @@ export function validateToken(token: string): void {
   if (!token || typeof token !== "string") {
     throw new ValidationError("Token must be a non-empty string", "token");
   }
-  if (token.length < 20) {
+  // Reduced minimum length from 20 to 10 to support various token formats
+  if (token.length < 10) {
     throw new ValidationError("Token is too short", "token");
+  }
+  // Additional security check: ensure token contains only valid characters
+  if (!/^[\w\-\.~+/]+=*$/.test(token)) {
+    throw new ValidationError("Token contains invalid characters", "token");
   }
 }
 
@@ -75,29 +80,38 @@ export function validateTokenType(tokenType: string): void {
 }
 
 /**
- * Validate expires_in value
+ * Validate expires_in value (optional field)
+ * Returns a default value if invalid or missing
  */
-export function validateExpiresIn(expiresIn: number): void {
-  if (!Number.isInteger(expiresIn) || expiresIn <= 0) {
-    throw new ValidationError("expires_in must be a positive integer", "expires_in");
+export function validateExpiresIn(expiresIn: number | undefined, defaultValue: number = 3600): number {
+  // If missing or invalid, return default
+  if (expiresIn === undefined || expiresIn === null || !Number.isInteger(expiresIn) || expiresIn <= 0) {
+    return defaultValue;
   }
+  
   // Sanity check: shouldn't be more than 1 year
   if (expiresIn > 365 * 24 * 60 * 60) {
-    throw new ValidationError("expires_in value is unreasonably large", "expires_in");
+    return defaultValue;
   }
+  
+  return expiresIn;
 }
 
 /**
- * Validate interval for polling
+ * Validate interval for polling (optional field)
+ * Returns a default value if invalid or missing
  */
-export function validateInterval(interval: number): void {
-  if (!Number.isInteger(interval) || interval <= 0) {
-    throw new ValidationError("Interval must be a positive integer", "interval");
+export function validateInterval(interval: number | undefined, defaultValue: number = 5): number {
+  // If missing or invalid, return default
+  if (interval === undefined || interval === null || !Number.isInteger(interval) || interval <= 0) {
+    return defaultValue;
   }
-  // Minimum 1 second, maximum 60 seconds
-  if (interval < 1 || interval > 60) {
-    throw new ValidationError("Interval must be between 1 and 60 seconds", "interval");
-  }
+  
+  // Clamp to valid range: 1-60 seconds
+  if (interval < 1) return 1;
+  if (interval > 60) return 60;
+  
+  return interval;
 }
 
 /**

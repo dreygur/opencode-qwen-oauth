@@ -159,12 +159,18 @@ function install() {
     process.exit(1);
   }
 
-  log("Installation complete!");
+  log("Installation complete! ✓");
+  log("");
   log("Next steps:");
-  log("1. Run: opencode");
-  log("2. Connect: /connect (select 'Qwen Code (qwen.ai OAuth)')");
-  log("3. Use model: /model qwen/qwen3-coder-plus");
-  log("Debug mode: QWEN_OAUTH_DEBUG=true opencode");
+  log("  1. Run: opencode");
+  log("  2. Connect: /connect (select 'Qwen Code (qwen.ai OAuth)')");
+  log("  3. Use model: /model qwen/qwen3-coder-plus");
+  log("");
+  log("Advanced:");
+  log("  • Debug mode: QWEN_OAUTH_DEBUG=true opencode");
+  log("  • Run diagnostics: npm run diagnose");
+  log("  • View logs: tail -f ~/.config/opencode/logs/qwen-oauth.log");
+  log("");
 }
 
 // ============================================

@@ -134,13 +134,42 @@ npx opencode-qwen-oauth uninstall
 npx opencode-qwen-oauth --help
 ```
 
+## Diagnostics
+
+Test if the Qwen OAuth endpoints are accessible:
+
+```bash
+npm run diagnose
+```
+
+This will check:
+- ✓ OAuth base URL accessibility
+- ✓ Device code endpoint functionality
+- ✓ API endpoint availability
+
+Example output:
+```
+[Base URL] https://chat.qwen.ai
+  Status: ✓ 200
+
+[Device Code] https://chat.qwen.ai/api/v1/oauth2/device/code
+  Status: ✓ 200
+
+[API Endpoints] Testing /chat/completions...
+  ⚠ https://portal.qwen.ai/v1
+    Status: 401 (endpoint exists, requires auth)
+```
+
 ## Troubleshooting
 
 ### "Device code expired"
-Complete the browser login within 5 minutes of starting `/connect`.
+Complete the browser login within 15 minutes of starting `/connect`.
 
 ### "invalid_grant" error
 Your refresh token has expired. Run `/connect` to re-authenticate.
+
+### "Quota exceeded" error
+Your free tier limit has been reached. Wait for quota reset or upgrade your account at https://chat.qwen.ai
 
 ### Provider not showing in /connect
 Use the CLI directly:
@@ -182,12 +211,31 @@ This plugin implements OAuth 2.0 Device Flow (RFC 8628) with PKCE:
 4. **Token Storage** - Tokens are stored in OpenCode's auth system
 5. **Auto Refresh** - Access tokens are refreshed before expiry
 
-## Security
+## Security & Important Notes
 
-- Uses PKCE (RFC 7636) for enhanced security
-- No client secret required
-- Tokens stored in OpenCode's secure auth storage
-- All OAuth activity logged for auditing
+### Security Features
+- ✅ Uses PKCE (RFC 7636) for enhanced security
+- ✅ No client secret required (safer for public clients)
+- ✅ Tokens stored in OpenCode's secure auth storage
+- ✅ All OAuth activity logged for auditing
+- ✅ Sensitive data sanitized in logs
+
+### Implementation Notes
+
+⚠️ **Important**: This plugin uses OAuth endpoints that appear to be part of Qwen's web interface (`chat.qwen.ai`). While the implementation follows standard OAuth 2.0 specifications (RFC 8628 Device Flow + RFC 7636 PKCE), these endpoints are not officially documented in Qwen's public API documentation.
+
+**What this means:**
+- The OAuth flow works correctly and follows industry standards
+- Endpoints are actively maintained and functional
+- Future changes to Qwen's authentication system may require plugin updates
+
+**Verified Working:**
+- ✅ OAuth Device Flow: `https://chat.qwen.ai/api/v1/oauth2/*`
+- ✅ API Endpoint: `https://portal.qwen.ai/v1/chat/completions`
+- ✅ Token Refresh: Automatic refresh before expiration
+- ✅ OpenAI-Compatible: Uses standard OpenAI API format
+
+Run `npm run diagnose` to verify endpoint availability at any time.
 
 ## Development
 

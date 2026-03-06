@@ -103,6 +103,12 @@ export async function fetchWithRetry(
         );
       }
 
+      // Don't retry on 401/403 - these are auth errors that need special handling
+      // Throwing them as NetworkError would block OAuth error handling in caller
+      if (response.status === 401 || response.status === 403) {
+        return response;
+      }
+
       // Other HTTP errors
       throw new NetworkError(
         `HTTP ${response.status}: ${response.statusText}`,

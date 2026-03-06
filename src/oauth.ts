@@ -10,7 +10,7 @@ import {
   QWEN_SCOPES,
 } from "./constants.js";
 import { createPkcePair } from "./pkce.js";
-import { debugLog, warnLog } from "./logger.js";
+import { debugLog, warnLog, infoLog } from "./logger.js";
 import { fetchWithRetry } from "./retry.js";
 import {
   DeviceFlowError,
@@ -62,6 +62,7 @@ interface TokenResponse {
   expires_in: number;
   refresh_token?: string; // Optional per RFC 6749 - may not be returned on refresh
   scope?: string;
+  api_key?: string; // Qwen-specific: API key for portal.qwen.ai
 }
 
 export async function authorizeDevice(): Promise<DeviceAuthorization> {
@@ -99,10 +100,10 @@ export async function authorizeDevice(): Promise<DeviceAuthorization> {
     // Validate response data
     validateDeviceCode(data.device_code);
     validateUserCode(data.user_code);
-    validateExpiresIn(data.expires_in);
     
-    const interval = data.interval || 5;
-    validateInterval(interval);
+    // Validate and normalize expires_in (with default if missing)
+    const expiresIn = validateExpiresIn(data.expires_in, 300); // Default 5 minutes for device code
+    const interval = validateInterval(data.interval);
 
     // Validate URLs
     if (!validateQwenUrl(data.verification_uri)) {
@@ -121,7 +122,7 @@ export async function authorizeDevice(): Promise<DeviceAuthorization> {
       user_code: data.user_code,
       verification_uri: data.verification_uri,
       verification_uri_complete: data.verification_uri_complete,
-      expires_in: data.expires_in,
+      expires_in: expiresIn,
       interval,
       verifier,
     };
@@ -148,13 +149,19 @@ export async function pollForToken(
   access_token?: string;
   refresh_token?: string;
   expires_in?: number;
+  api_key?: string;
   error?: string;
 }> {
   // Validate inputs
   try {
     validateDeviceCode(deviceCode);
-    validateInterval(intervalSeconds);
-    validateExpiresIn(expiresIn);
+    // Normalize interval and expiresIn with defaults if needed
+    const normalizedInterval = validateInterval(intervalSeconds);
+    const normalizedExpiresIn = validateExpiresIn(expiresIn);
+    
+    // Use normalized values
+    intervalSeconds = normalizedInterval;
+    expiresIn = normalizedExpiresIn;
   } catch (error) {
     debugLog("Invalid polling parameters", { error: String(error) });
     return {
@@ -211,21 +218,62 @@ export async function pollForToken(
       );
 
       if (response.ok) {
-        const data = (await response.json()) as TokenResponse;
+        const data = (await response.json()) as TokenResponse & Record<string, unknown>;
+
+        // Log full response to help debug (sanitized)
+        infoLog("🎯 Full OAuth token response received - PLEASE CHECK THIS", {
+          hasAccessToken: !!data.access_token,
+          hasRefreshToken: !!data.refresh_token,
+          hasApiKey: !!data.api_key,
+          tokenType: data.token_type,
+          expiresIn: data.expires_in,
+          scope: data.scope,
+          allFields: Object.keys(data), // Show ALL fields in response
+          additionalFields: Object.keys(data).filter(k => 
+            !['access_token', 'refresh_token', 'token_type', 'expires_in', 'scope', 'api_key'].includes(k)
+          ),
+        });
+        
+        // Also log with console for visibility
+        console.log("=".repeat(80));
+        console.log("QWEN OAUTH RESPONSE - All fields:", Object.keys(data));
+        console.log("Has api_key field?", !!data.api_key);
+        console.log("=".repeat(80));
 
         // Validate token response
         try {
           validateToken(data.access_token);
-          // For device flow, refresh_token is required on initial auth
-          if (!data.refresh_token) {
-            throw new Error("No refresh token returned");
+          // refresh_token is optional per RFC 6749
+          if (data.refresh_token) {
+            validateToken(data.refresh_token);
           }
-          validateToken(data.refresh_token);
-          validateExpiresIn(data.expires_in);
+          
+          // Validate api_key if present (Qwen-specific)
+          if (data.api_key) {
+            validateToken(data.api_key);
+            infoLog("OAuth response includes api_key field - will use for API calls");
+          }
+          
+          // Normalize expires_in with default if invalid
+          const expiresIn = validateExpiresIn(data.expires_in, 3600); // Default to 1 hour
+          
           // Validate token_type if provided (optional for compatibility)
           if (data.token_type) {
             validateTokenType(data.token_type);
           }
+          
+          debugLog("Token received successfully", { 
+            pollAttempts,
+            hasApiKey: !!data.api_key,
+          });
+          cleanup();
+          return {
+            success: true,
+            access_token: data.access_token,
+            refresh_token: data.refresh_token,
+            expires_in: expiresIn,
+            api_key: data.api_key,
+          };
         } catch (validationError) {
           debugLog("Invalid token response", {
             error: String(validationError),
@@ -237,14 +285,6 @@ export async function pollForToken(
           };
         }
 
-        debugLog("Token received successfully", { pollAttempts });
-        cleanup();
-        return {
-          success: true,
-          access_token: data.access_token,
-          refresh_token: data.refresh_token,
-          expires_in: data.expires_in,
-        };
       }
 
       // Handle error responses
@@ -269,7 +309,7 @@ export async function pollForToken(
         cleanup();
         return {
           success: false,
-          error: "Device code expired. Please try again.",
+          error: "Device code expired. Please run '/connect' again and complete authentication within 15 minutes.",
         };
       }
 
@@ -323,6 +363,7 @@ export async function refreshAccessToken(
   access_token?: string;
   refresh_token?: string;
   expires_in?: number;
+  api_key?: string;
   error?: string;
 }> {
   // Use mutex to ensure only one refresh happens at a time
@@ -371,22 +412,25 @@ export async function refreshAccessToken(
         const oauthError = validateOAuthError(errorData);
         
         debugLog("OAuth error during token refresh", {
+          status: response.status,
+          statusText: response.statusText,
           error: oauthError.error,
           description: oauthError.error_description,
+          fullResponse: errorData,
         });
         
         // Handle specific OAuth errors
         if (oauthError.error === "invalid_grant") {
           return {
             success: false,
-            error: "Invalid refresh token or client_id",
+            error: "Your refresh token has expired. Please run '/connect' in OpenCode to re-authenticate with Qwen.",
           };
         }
         
         if (oauthError.error === "invalid_client") {
           return {
             success: false,
-            error: "Invalid client_id",
+            error: "OAuth client configuration error. Please update the plugin or contact support.",
           };
         }
         
@@ -400,7 +444,15 @@ export async function refreshAccessToken(
 
       // Validate new tokens
       validateToken(data.access_token);
-      validateExpiresIn(data.expires_in);
+      
+      // Validate api_key if present (Qwen-specific)
+      if (data.api_key) {
+        validateToken(data.api_key);
+        infoLog("Refresh response includes api_key field - will use for API calls");
+      }
+      
+      // Normalize expires_in with default if invalid
+      const expiresIn = validateExpiresIn(data.expires_in, 3600); // Default to 1 hour
       
       // Validate token_type if provided (optional for compatibility)
       if (data.token_type) {
@@ -410,16 +462,22 @@ export async function refreshAccessToken(
       // Per RFC 6749: refresh_token is optional in refresh response
       // If not provided, continue using the old refresh token
       const newRefreshToken = data.refresh_token || refreshToken;
-      validateToken(newRefreshToken);
+      if (!newRefreshToken) {
+        debugLog("No refresh token available, using existing token");
+      } else {
+        validateToken(newRefreshToken);
+      }
 
       debugLog("Token refresh successful", {
         new_refresh_token: !!data.refresh_token,
+        has_api_key: !!data.api_key,
       });
       return {
         success: true,
         access_token: data.access_token,
         refresh_token: newRefreshToken,
-        expires_in: data.expires_in,
+        expires_in: expiresIn,
+        api_key: data.api_key,
       };
     } catch (error) {
       debugLog("Token refresh failed", { error: String(error) });

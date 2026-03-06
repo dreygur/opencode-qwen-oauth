@@ -19,7 +19,9 @@
     "dev": "tsc -p tsconfig.json --watch",
     "prepublishOnly": "npm run build",
     "test": "bun test",
-    "test:watch": "bun test --watch"
+    "test:watch": "bun test --watch",
+    "diagnose": "npm run build && node dist/diagnostic.js",
+    "test:tokens": "npm run build && node dist/token-test.js"
   },
   "keywords": [
     "opencode",
