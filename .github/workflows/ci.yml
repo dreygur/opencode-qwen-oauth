@@ -9,42 +9,50 @@ on:
 jobs:
   test:
     runs-on: ubuntu-latest
+    
+    strategy:
+      matrix:
+        node-version: [18.x, 20.x, 22.x]
+    
     steps:
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@v4
 
-      - name: Setup Bun
-        uses: oven-sh/setup-bun@v1
+      - name: Setup Node.js ${{ matrix.node-version }}
+        uses: actions/setup-node@v4
         with:
-          bun-version: latest
+          node-version: ${{ matrix.node-version }}
+          cache: 'npm'
 
       - name: Install dependencies
-        run: bun install
+        run: npm ci
 
       - name: Run tests
-        run: bun test
+        run: npm test
 
       - name: Build
-        run: bun run build
+        run: npm run build
 
       - name: Check TypeScript
-        run: bun run tsc --noEmit
+        run: npx tsc --noEmit
 
   lint:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@v4
 
-      - name: Setup Bun
-        uses: oven-sh/setup-bun@v1
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
         with:
-          bun-version: latest
+          node-version: '20.x'
+          cache: 'npm'
 
       - name: Install dependencies
-        run: bun install
+        run: npm ci
 
       - name: Check formatting
         run: |
-          if ! bun x prettier --check "src/**/*.ts" "tests/**/*.ts"; then
-            echo "❌ Code formatting issues detected. Run 'bun x prettier --write .' to fix."
+          if ! npx prettier --check "src/**/*.ts" "bin/**/*.js"; then
+            echo "❌ Code formatting issues detected. Run 'npx prettier --write .' to fix."
             exit 1
           fi
+
