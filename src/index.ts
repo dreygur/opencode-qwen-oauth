@@ -43,7 +43,9 @@ export const QwenOAuthPlugin: Plugin = async ({ client, directory, worktree, pro
       async loader(getAuth, provider) {
         let auth = await getAuth();
 
-        if (!auth || auth.type !== "oauth" || !auth.access) {
+        const isExpired = (auth as any)?.expires ? (auth as any).expires < Date.now() : false;
+
+        if (!auth || auth.type !== "oauth" || !auth.access || isExpired) {
           const fileCreds = credentialRepository.load();
           if (fileCreds) {
             auth = {
