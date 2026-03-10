@@ -6,7 +6,7 @@
  * @packageDocumentation
  */
 
-const PLUGIN_VERSION = "2.3.0";
+const PLUGIN_VERSION = "2.3.1";
 const QWEN_CODE_VERSION = "0.10.3";
 const TOKEN_CACHE_DURATION = 5 * 60 * 1000;
 const REFRESH_BEFORE_EXPIRY_MS = 5 * 60 * 1000;

@@ -148,7 +148,7 @@ function install() {
 
   opencodePackage.dependencies = opencodePackage.dependencies || {};
   if (!opencodePackage.dependencies["opencode-qwen-oauth"]) {
-    opencodePackage.dependencies["opencode-qwen-oauth"] = "^2.3.0";
+    opencodePackage.dependencies["opencode-qwen-oauth"] = "^2.3.1";
     log("Added 'opencode-qwen-oauth' to .opencode/package.json dependencies");
   }
 
