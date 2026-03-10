@@ -1,6 +1,6 @@
 {
   "name": "opencode-qwen-oauth",
-  "version": "2.4.0",
+  "version": "2.4.1",
   "description": "OAuth 2.0 Device Flow plugin for OpenCode - authenticate with Qwen.ai (PKCE secured, auto token refresh)",
   "type": "module",
   "main": "dist/index.js",
