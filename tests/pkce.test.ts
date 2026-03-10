@@ -1,6 +1,6 @@
 import { test, describe } from "node:test";
 import assert from "node:assert";
-import { createPkcePair } from "../src/pkce.js";
+import { createPkcePair } from "../src/utils/pkce.js";
 
 describe("PKCE", () => {
   test("should generate valid PKCE pair", () => {

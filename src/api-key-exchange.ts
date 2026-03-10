@@ -3,7 +3,7 @@
  * Attempts to exchange OAuth token for API key
  */
 
-import { debugLog, warnLog, infoLog } from "./logger.js";
+import { debugLog, warnLog, infoLog } from "./utils/logger.js";
 import { QWEN_OAUTH_BASE_URL } from "./constants.js";
 
 interface ApiKeyResponse {

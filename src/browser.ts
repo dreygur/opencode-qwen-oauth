@@ -3,7 +3,7 @@
  */
 
 import { spawn } from "node:child_process";
-import { Debouncer } from "./mutex.js";
+import { Debouncer } from "./utils/mutex.js";
 
 // Debouncer to prevent multiple rapid browser opens
 const browserDebouncer = new Debouncer();
