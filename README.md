@@ -15,14 +15,15 @@ Qwen OAuth authentication plugin for [OpenCode](https://opencode.ai) - authentic
 
 - 🔐 **OAuth Device Flow** - PKCE-secured authentication, works in headless/CI environments
 - 🔄 **Automatic Token Refresh** - Tokens are refreshed before expiry
+- 💾 **Persistent Credentials** - Tokens saved to `~/.qwen/oauth_creds.json` for persistence across sessions
 - 🌐 **Auto Browser Open** - Automatically opens browser for authentication
 - 📝 **File Logging** - All OAuth activity logged to `~/.config/opencode/logs/qwen-oauth.log`
-- 🐛 **Debug Mode** - Enable verbose output with `QWEN_OAUTH_DEBUG=true`
 - 🚀 **Easy Install** - One-command installation with CLI tool
-- 🎯 **Custom Headers** - Automatically adds Qwen-specific headers to API requests
+- 🎯 **Custom Headers** - Automatically adds Qwen-specific headers (X-DashScope-*) to API requests
 - ⚙️ **Optimized Parameters** - Pre-configured temperature and topP settings for Qwen models
 - 🌍 **Environment Variables** - Exposes Qwen credentials to shell environments
 - 📊 **Event Monitoring** - Tracks authentication and session events for debugging
+- ⏱️ **Request Throttling** - Built-in rate limiting to avoid 429 errors
 
 ## Quick Start
 
@@ -58,15 +59,15 @@ Select **"Qwen Code (qwen.ai OAuth)"** and follow the device flow instructions.
 ### Use Qwen Models
 
 ```
-/model qwen/qwen3-coder-plus
+/model qwen/coder-model
 ```
 
 ## Models
 
-| Model | Context | Features |
-|-------|---------|----------|
-| `qwen3-coder-plus` | 1M tokens | Optimized for coding |
-| `qwen3-vl-plus` | 256K tokens | Vision + language |
+| Model | Context | Output | Features |
+|-------|---------|--------|----------|
+| `coder-model` | 1M tokens | 64K | Optimized for coding |
+| `vision-model` | 128K tokens | 32K | Vision + language |
 
 ## Configuration
 
@@ -106,13 +107,17 @@ If you prefer manual setup, add to `.opencode/opencode.json`:
         "baseURL": "https://portal.qwen.ai/v1"
       },
       "models": {
-        "qwen3-coder-plus": {
-          "id": "qwen3-coder-plus",
-          "name": "Qwen3 Coder Plus"
+        "coder-model": {
+          "id": "coder-model",
+          "name": "Qwen Coder",
+          "limit": { "context": 1048576, "output": 65536 },
+          "modalities": { "input": ["text"], "output": ["text"] }
         },
-        "qwen3-vl-plus": {
-          "id": "qwen3-vl-plus",
-          "name": "Qwen3 VL Plus",
+        "vision-model": {
+          "id": "vision-model",
+          "name": "Qwen Vision",
+          "limit": { "context": 131072, "output": 32768 },
+          "modalities": { "input": ["text", "image"], "output": ["text"] },
           "attachment": true
         }
       }
@@ -196,6 +201,14 @@ sudo dnf install xdg-utils
 sudo pacman -S xdg-utils
 ```
 
+### Credentials File
+Credentials are saved to `~/.qwen/oauth_creds.json` (compatible with qwen-code CLI):
+```
+~/.qwen/oauth_creds.json
+```
+
+This allows sharing authentication between OpenCode plugin and qwen-code CLI.
+
 ### Check logs
 ```bash
 cat ~/.config/opencode/logs/qwen-oauth.log
@@ -216,7 +229,7 @@ This plugin implements OAuth 2.0 Device Flow (RFC 8628) with PKCE:
 ### Security Features
 - ✅ Uses PKCE (RFC 7636) for enhanced security
 - ✅ No client secret required (safer for public clients)
-- ✅ Tokens stored in OpenCode's secure auth storage
+- ✅ Tokens stored in OpenCode's auth system and `~/.qwen/oauth_creds.json` for persistence
 - ✅ All OAuth activity logged for auditing
 - ✅ Sensitive data sanitized in logs
 
@@ -274,8 +287,10 @@ Monitors session events (creation, errors) for debugging and logging.
 
 #### `chat.headers` Hook
 Injects custom headers for Qwen API requests:
-- `X-Qwen-Client: OpenCode`
-- `X-Qwen-Plugin-Version: 1.1.0`
+- `User-Agent: QwenCode/0.10.3 (platform)`
+- `X-DashScope-CacheControl: enable`
+- `X-DashScope-UserAgent: QwenCode/0.10.3 (platform)`
+- `X-DashScope-AuthType: qwen-oauth`
 
 #### `chat.params` Hook
 Optimizes model parameters for Qwen:
@@ -294,9 +309,12 @@ opencode-qwen-oauth/
 ├── src/                  # TypeScript source files
 │   ├── index.ts          # Main plugin with hooks
 │   ├── oauth.ts          # OAuth device flow logic
+│   ├── credentials.ts    # Credential storage (~/.qwen/)
 │   ├── pkce.ts           # PKCE implementation
 │   ├── browser.ts        # Browser opening utility
 │   ├── logger.ts         # Logging utilities
+│   ├── request-queue.ts  # Rate limiting
+│   ├── diagnostic.ts     # Diagnostics CLI
 │   └── constants.ts      # API constants
 ├── bin/                  # CLI scripts
 │   └── install.js        # Installer script
