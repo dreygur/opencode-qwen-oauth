@@ -1,6 +1,6 @@
 {
   "name": "opencode-qwen-oauth",
-  "version": "2.2.0",
+  "version": "2.3.0",
   "description": "Qwen OAuth authentication plugin for OpenCode - authenticate with Qwen.ai using OAuth device flow",
   "type": "module",
   "main": "dist/index.js",
@@ -32,16 +32,16 @@
     "ai",
     "llm"
   ],
-  "author": "Your Name <your.email@example.com>",
+  "author": "Rakibul Yeasin <ryeasin03@gmail.com>",
   "license": "MIT",
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/yourusername/opencode-qwen-oauth.git"
+    "url": "git+https://github.com/dreygur/opencode-qwen-oauth.git"
   },
   "bugs": {
-    "url": "https://github.com/yourusername/opencode-qwen-oauth/issues"
+    "url": "https://github.com/dreygur/opencode-qwen-oauth/issues"
   },
-  "homepage": "https://github.com/yourusername/opencode-qwen-oauth#readme",
+  "homepage": "https://github.com/dreygur/opencode-qwen-oauth#readme",
   "dependencies": {
     "@opencode-ai/plugin": "^1.2.15"
   },

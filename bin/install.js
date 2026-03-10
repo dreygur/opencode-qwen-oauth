@@ -105,13 +105,17 @@ function install() {
         baseURL: "https://portal.qwen.ai/v1",
       },
       models: {
-        "qwen3-coder-plus": {
-          id: "qwen3-coder-plus",
-          name: "Qwen3 Coder Plus",
+        "coder-model": {
+          id: "coder-model",
+          name: "Qwen Coder",
+          limit: { context: 1048576, output: 65536 },
+          modalities: { input: ["text"], output: ["text"] },
         },
-        "qwen3-vl-plus": {
-          id: "qwen3-vl-plus",
-          name: "Qwen3 VL Plus",
+        "vision-model": {
+          id: "vision-model",
+          name: "Qwen Vision",
+          limit: { context: 131072, output: 32768 },
+          modalities: { input: ["text", "image"], output: ["text"] },
           attachment: true,
         },
       },
@@ -144,7 +148,7 @@ function install() {
 
   opencodePackage.dependencies = opencodePackage.dependencies || {};
   if (!opencodePackage.dependencies["opencode-qwen-oauth"]) {
-    opencodePackage.dependencies["opencode-qwen-oauth"] = "^1.0.0";
+    opencodePackage.dependencies["opencode-qwen-oauth"] = "^2.3.0";
     log("Added 'opencode-qwen-oauth' to .opencode/package.json dependencies");
   }
 
@@ -164,12 +168,13 @@ function install() {
   log("Next steps:");
   log("  1. Run: opencode");
   log("  2. Connect: /connect (select 'Qwen Code (qwen.ai OAuth)')");
-  log("  3. Use model: /model qwen/qwen3-coder-plus");
+  log("  3. Use model: /model qwen/coder-model");
+  log("     Vision model: /model qwen/vision-model");
   log("");
   log("Advanced:");
-  log("  • Debug mode: QWEN_OAUTH_DEBUG=true opencode");
   log("  • Run diagnostics: npm run diagnose");
   log("  • View logs: tail -f ~/.config/opencode/logs/qwen-oauth.log");
+  log("  • Credentials saved to: ~/.qwen/oauth_creds.json");
   log("");
 }
 
@@ -245,9 +250,14 @@ Usage:
 After installation:
   1. Run: opencode
   2. Connect: /connect (select 'Qwen Code (qwen.ai OAuth)')
-  3. Use model: /model qwen/qwen3-coder-plus
+  3. Use model: /model qwen/coder-model
 
-Debug mode: QWEN_OAUTH_DEBUG=true opencode
+Models:
+  - coder-model: Qwen Coder (1M context, 64K output)
+  - vision-model: Qwen Vision (128K context, 32K output, supports images)
+
+Logs:
+  - tail -f ~/.config/opencode/logs/qwen-oauth.log
 `);
 } else {
   error(`Unknown command: ${command}`);
