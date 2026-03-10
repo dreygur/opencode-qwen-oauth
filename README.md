@@ -17,13 +17,12 @@ Qwen OAuth authentication plugin for [OpenCode](https://opencode.ai) - authentic
 - 🔄 **Automatic Token Refresh** - Tokens are refreshed before expiry
 - 💾 **Persistent Credentials** - Tokens saved to `~/.qwen/oauth_creds.json` for persistence across sessions
 - 🌐 **Auto Browser Open** - Automatically opens browser for authentication
-- 📝 **File Logging** - All OAuth activity logged to `~/.config/opencode/logs/qwen-oauth.log`
 - 🚀 **Easy Install** - One-command installation with CLI tool
 - 🎯 **Custom Headers** - Automatically adds Qwen-specific headers (X-DashScope-*) to API requests
 - ⚙️ **Optimized Parameters** - Pre-configured temperature and topP settings for Qwen models
 - 🌍 **Environment Variables** - Exposes Qwen credentials to shell environments
-- 📊 **Event Monitoring** - Tracks authentication and session events for debugging
 - ⏱️ **Request Throttling** - Built-in rate limiting to avoid 429 errors
+- 🏗️ **Clean Architecture** - Layered design (services, repositories, middleware) for maintainability
 
 ## Quick Start
 
@@ -73,23 +72,13 @@ Select **"Qwen Code (qwen.ai OAuth)"** and follow the device flow instructions.
 
 ### Debug Mode
 
-Enable verbose logging to console:
+Enable verbose logging:
 
 ```bash
 QWEN_OAUTH_DEBUG=true opencode
 ```
 
-### Log Files
-
-All OAuth activity is logged to:
-```
-~/.config/opencode/logs/qwen-oauth.log
-```
-
-View logs in real-time:
-```bash
-tail -f ~/.config/opencode/logs/qwen-oauth.log
-```
+Logs are output to OpenCode's logging system and can be viewed in the OpenCode interface.
 
 ### Manual Configuration
 
@@ -141,29 +130,13 @@ npx opencode-qwen-oauth --help
 
 ## Diagnostics
 
-Test if the Qwen OAuth endpoints are accessible:
+Verify Qwen OAuth endpoints are accessible:
 
 ```bash
-npm run diagnose
+curl -I https://chat.qwen.ai/api/v1/oauth2/device/code
 ```
 
-This will check:
-- ✓ OAuth base URL accessibility
-- ✓ Device code endpoint functionality
-- ✓ API endpoint availability
-
-Example output:
-```
-[Base URL] https://chat.qwen.ai
-  Status: ✓ 200
-
-[Device Code] https://chat.qwen.ai/api/v1/oauth2/device/code
-  Status: ✓ 200
-
-[API Endpoints] Testing /chat/completions...
-  ⚠ https://portal.qwen.ai/v1
-    Status: 401 (endpoint exists, requires auth)
-```
+This should return `200 OK` if endpoints are available.
 
 ## Troubleshooting
 
@@ -210,9 +183,8 @@ Credentials are saved to `~/.qwen/oauth_creds.json` (compatible with qwen-code C
 This allows sharing authentication between OpenCode plugin and qwen-code CLI.
 
 ### Check logs
-```bash
-cat ~/.config/opencode/logs/qwen-oauth.log
-```
+
+OpenCode logs can be viewed through the OpenCode interface or by checking the OpenCode log directory.
 
 ## How It Works
 
@@ -254,7 +226,7 @@ Run `npm run diagnose` to verify endpoint availability at any time.
 
 ```bash
 # Clone and install
-git clone https://github.com/yourusername/opencode-qwen-oauth.git
+git clone https://github.com/dreygur/opencode-qwen-oauth.git
 cd opencode-qwen-oauth
 npm install
 
@@ -264,26 +236,42 @@ npm run build
 # Watch mode
 npm run dev
 
+# Run tests
+npm test
+
 # Test locally
 npm link
 cd /path/to/project
-opencode-qwen-oauth install
+npx opencode-qwen-oauth install
 ```
+
+### Testing
+
+All tests use Node.js native test runner with tsx:
+
+```bash
+npm test
+```
+
+29 tests covering:
+- PKCE key pair generation
+- Input validation (URLs, tokens, codes)
+- Data sanitization
 
 ## Plugin Architecture
 
-This plugin implements multiple OpenCode plugin hooks:
+This plugin implements multiple OpenCode plugin hooks using a clean, layered architecture:
 
 ### Hooks Implemented
 
 #### `auth` Hook
-Provides OAuth device flow authentication with automatic browser opening and token polling.
+Provides OAuth device flow authentication with automatic browser opening and token polling. Uses `TokenService` for token management and `CredentialRepository` for persistence.
 
 #### `config` Hook  
 Dynamically registers the Qwen provider and available models with OpenCode.
 
 #### `event` Hook
-Monitors session events (creation, errors) for debugging and logging.
+Monitors session events for debugging.
 
 #### `chat.headers` Hook
 Injects custom headers for Qwen API requests:
@@ -302,28 +290,32 @@ Exposes environment variables to shell commands:
 - `QWEN_API_BASE_URL` - Qwen API endpoint
 - `QWEN_PROVIDER` - Provider identifier
 
-## Project Structure
+## Architecture
+
+This plugin uses a **layered architecture** for maintainability:
 
 ```
-opencode-qwen-oauth/
-├── src/                  # TypeScript source files
-│   ├── index.ts          # Main plugin with hooks
-│   ├── oauth.ts          # OAuth device flow logic
-│   ├── credentials.ts    # Credential storage (~/.qwen/)
-│   ├── pkce.ts           # PKCE implementation
-│   ├── browser.ts        # Browser opening utility
-│   ├── logger.ts         # Logging utilities
-│   ├── request-queue.ts  # Rate limiting
-│   ├── diagnostic.ts     # Diagnostics CLI
-│   └── constants.ts      # API constants
-├── bin/                  # CLI scripts
-│   └── install.js        # Installer script
-├── dist/                 # Compiled JavaScript (generated)
-├── package.json          # Package manifest
-├── tsconfig.json         # TypeScript config
-├── LICENSE               # MIT license
-└── README.md             # This file
+src/
+├── index.ts                    # Plugin entry point (190 lines)
+├── types.ts                    # Shared type definitions
+├── strategies/
+│   └── oauth.strategy.ts       # OAuth Device Flow (RFC 8628)
+├── services/
+│   └── token.service.ts        # Token management & caching
+├── repositories/
+│   └── credential.repository.ts # File-based credential storage
+├── middleware/
+│   ├── auth.middleware.ts      # Auth fetch interceptor
+│   ├── rate-limit.middleware.ts # Request throttling
+│   └── retry.middleware.ts     # Retry with exponential backoff
+├── utils/
+│   ├── logger.ts               # Structured logging
+│   ├── mutex.ts                # Concurrency control
+│   └── pkce.ts                 # PKCE key generation
+└── [config, validation, etc.]
 ```
+
+**Total:** ~1,670 lines (refactored from 2,810 lines, -41%)
 
 **Note:** `.opencode/` directory is for local testing only and is not included in the npm package.
 
