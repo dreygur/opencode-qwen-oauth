@@ -4,7 +4,7 @@
 [![npm downloads](https://img.shields.io/npm/dm/opencode-qwen-oauth.svg?style=flat-square)](https://www.npmjs.com/package/opencode-qwen-oauth)
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg?style=flat-square)](LICENSE)
 [![CI Status](https://img.shields.io/github/actions/workflow/status/dreygur/opencode-qwen-oauth/ci.yml?branch=main&style=flat-square&label=CI)](https://github.com/dreygur/opencode-qwen-oauth/actions)
-[![Security Audit](https://img.shields.io/badge/security-audited-success?style=flat-square)](AUDIT.md)
+[![Contributing](https://img.shields.io/badge/contributions-welcome-brightgreen?style=flat-square)](CONTRIBUTING.md)
 [![TypeScript](https://img.shields.io/badge/TypeScript-5.9-blue?style=flat-square&logo=typescript)](https://www.typescriptlang.org/)
 [![OpenCode](https://img.shields.io/badge/OpenCode-Plugin-purple?style=flat-square)](https://opencode.ai)
 [![Qwen](https://img.shields.io/badge/Qwen.ai-OAuth-red?style=flat-square)](https://qwen.ai)
@@ -325,7 +325,13 @@ MIT
 
 ## Contributing
 
-Contributions welcome! Please open an issue or submit a PR.
+Contributions are welcome! See [CONTRIBUTING.md](CONTRIBUTING.md) for guidelines.
+
+- 🐛 Report bugs via [Issues](https://github.com/dreygur/opencode-qwen-oauth/issues)
+- 💡 Suggest features via [Discussions](https://github.com/dreygur/opencode-qwen-oauth/discussions)
+- 🔧 Submit PRs with tests and documentation
+
+If you find this plugin helpful, please ⭐ star the repo to support the project!
 
 ## Related
 

@@ -1,7 +1,7 @@
 {
   "name": "opencode-qwen-oauth",
   "version": "2.4.0",
-  "description": "Qwen OAuth authentication plugin for OpenCode - authenticate with Qwen.ai using OAuth device flow",
+  "description": "OAuth 2.0 Device Flow plugin for OpenCode - authenticate with Qwen.ai (PKCE secured, auto token refresh)",
   "type": "module",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
@@ -27,13 +27,26 @@
     "opencode",
     "opencode-plugin",
     "qwen",
+    "qwen-ai",
     "oauth",
+    "oauth2",
+    "device-flow",
+    "pkce",
     "authentication",
+    "auth",
     "ai",
-    "llm"
+    "llm",
+    "typescript",
+    "plugin",
+    "ai-auth",
+    "headless-auth"
   ],
   "author": "Rakibul Yeasin <ryeasin03@gmail.com>",
   "license": "MIT",
+  "funding": {
+    "type": "github",
+    "url": "https://github.com/sponsors/dreygur"
+  },
   "repository": {
     "type": "git",
     "url": "git+https://github.com/dreygur/opencode-qwen-oauth.git"
