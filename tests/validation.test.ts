@@ -1,4 +1,5 @@
-import { test, expect, describe } from "bun:test";
+import { test, describe } from "node:test";
+import assert from "node:assert";
 import {
   validateQwenUrl,
   validateDeviceCode,
@@ -7,107 +8,121 @@ import {
   validateExpiresIn,
   validateInterval,
   sanitizeLogData,
-} from "../src/validation";
-import { ValidationError } from "../src/errors";
+} from "../src/validation.js";
+import { ValidationError } from "../src/errors.js";
 
 describe("Validation", () => {
   describe("validateQwenUrl", () => {
     test("should accept valid Qwen URLs", () => {
-      expect(validateQwenUrl("https://chat.qwen.ai/auth")).toBe(true);
-      expect(validateQwenUrl("https://portal.qwen.ai/v1")).toBe(true);
-      expect(validateQwenUrl("https://api.qwen.ai/test")).toBe(true);
+      assert.strictEqual(validateQwenUrl("https://chat.qwen.ai/auth"), true);
+      assert.strictEqual(validateQwenUrl("https://portal.qwen.ai/v1"), true);
+      assert.strictEqual(validateQwenUrl("https://api.qwen.ai/test"), true);
     });
 
     test("should reject non-HTTPS URLs", () => {
-      expect(validateQwenUrl("http://chat.qwen.ai")).toBe(false);
+      assert.strictEqual(validateQwenUrl("http://chat.qwen.ai"), false);
     });
 
     test("should reject non-Qwen domains", () => {
-      expect(validateQwenUrl("https://example.com")).toBe(false);
-      expect(validateQwenUrl("https://fake-qwen.ai.com")).toBe(false);
+      assert.strictEqual(validateQwenUrl("https://example.com"), false);
+      assert.strictEqual(validateQwenUrl("https://fake-qwen.ai.com"), false);
     });
 
     test("should reject invalid URLs", () => {
-      expect(validateQwenUrl("not-a-url")).toBe(false);
+      assert.strictEqual(validateQwenUrl("not-a-url"), false);
     });
   });
 
   describe("validateDeviceCode", () => {
     test("should accept valid device codes", () => {
-      expect(() => validateDeviceCode("valid_device_code_123")).not.toThrow();
+      assert.doesNotThrow(() => validateDeviceCode("valid_device_code_123"));
     });
 
     test("should reject empty codes", () => {
-      expect(() => validateDeviceCode("")).toThrow(ValidationError);
+      assert.throws(() => validateDeviceCode(""), ValidationError);
     });
 
     test("should reject too short codes", () => {
-      expect(() => validateDeviceCode("short")).toThrow(ValidationError);
+      assert.throws(() => validateDeviceCode("short"), ValidationError);
     });
 
     test("should reject too long codes", () => {
       const longCode = "a".repeat(101);
-      expect(() => validateDeviceCode(longCode)).toThrow(ValidationError);
+      assert.throws(() => validateDeviceCode(longCode), ValidationError);
     });
   });
 
   describe("validateUserCode", () => {
     test("should accept valid user codes", () => {
-      expect(() => validateUserCode("ABCD-1234")).not.toThrow();
-      expect(() => validateUserCode("XYZW123")).not.toThrow();
+      assert.doesNotThrow(() => validateUserCode("ABCD-1234"));
+      assert.doesNotThrow(() => validateUserCode("XYZW123"));
     });
 
     test("should reject invalid formats", () => {
-      expect(() => validateUserCode("abc")).toThrow(ValidationError);
-      expect(() => validateUserCode("TOOLONG12345")).toThrow(ValidationError);
-      expect(() => validateUserCode("invalid!")).toThrow(ValidationError);
+      assert.throws(() => validateUserCode("abc"), ValidationError); // too short
+      assert.throws(() => validateUserCode("TOOLONGCODE123"), ValidationError); // too long (>12)
+      assert.throws(() => validateUserCode("invalid!"), ValidationError); // invalid chars
+      assert.throws(() => validateUserCode("AB"), ValidationError); // too short
     });
   });
 
   describe("validateToken", () => {
     test("should accept valid tokens", () => {
       const validToken = "a".repeat(50);
-      expect(() => validateToken(validToken)).not.toThrow();
+      assert.doesNotThrow(() => validateToken(validToken));
     });
 
     test("should reject short tokens", () => {
-      expect(() => validateToken("short")).toThrow(ValidationError);
+      assert.throws(() => validateToken("short"), ValidationError);
     });
 
     test("should reject empty tokens", () => {
-      expect(() => validateToken("")).toThrow(ValidationError);
+      assert.throws(() => validateToken(""), ValidationError);
     });
   });
 
   describe("validateExpiresIn", () => {
     test("should accept valid expiration times", () => {
-      expect(() => validateExpiresIn(3600)).not.toThrow();
-      expect(() => validateExpiresIn(86400)).not.toThrow();
+      assert.strictEqual(validateExpiresIn(3600), 3600);
+      assert.strictEqual(validateExpiresIn(86400), 86400);
     });
 
-    test("should reject negative values", () => {
-      expect(() => validateExpiresIn(-1)).toThrow(ValidationError);
+    test("should return default for negative values", () => {
+      assert.strictEqual(validateExpiresIn(-1), 3600); // default
+      assert.strictEqual(validateExpiresIn(-1, 7200), 7200); // custom default
     });
 
-    test("should reject zero", () => {
-      expect(() => validateExpiresIn(0)).toThrow(ValidationError);
+    test("should return default for zero", () => {
+      assert.strictEqual(validateExpiresIn(0), 3600);
     });
 
-    test("should reject unreasonably large values", () => {
+    test("should return default for unreasonably large values", () => {
       const tooLarge = 365 * 24 * 60 * 60 + 1;
-      expect(() => validateExpiresIn(tooLarge)).toThrow(ValidationError);
+      assert.strictEqual(validateExpiresIn(tooLarge), 3600);
+    });
+
+    test("should return default for undefined", () => {
+      assert.strictEqual(validateExpiresIn(undefined), 3600);
+      assert.strictEqual(validateExpiresIn(undefined, 1800), 1800);
     });
   });
 
   describe("validateInterval", () => {
     test("should accept valid intervals", () => {
-      expect(() => validateInterval(5)).not.toThrow();
-      expect(() => validateInterval(30)).not.toThrow();
+      assert.strictEqual(validateInterval(5), 5);
+      assert.strictEqual(validateInterval(30), 30);
     });
 
-    test("should reject intervals outside range", () => {
-      expect(() => validateInterval(0)).toThrow(ValidationError);
-      expect(() => validateInterval(61)).toThrow(ValidationError);
+    test("should clamp intervals outside range", () => {
+      assert.strictEqual(validateInterval(0), 5); // default
+      assert.strictEqual(validateInterval(-5), 5); // default for negative
+      assert.strictEqual(validateInterval(61), 60); // clamp to max
+      assert.strictEqual(validateInterval(100), 60); // clamp to max
+    });
+
+    test("should return default for undefined", () => {
+      assert.strictEqual(validateInterval(undefined), 5);
+      assert.strictEqual(validateInterval(undefined, 10), 10);
     });
   });
 
@@ -121,9 +136,9 @@ describe("Validation", () => {
 
       const sanitized = sanitizeLogData(data);
 
-      expect(sanitized.access_token).toBe("[REDACTED]");
-      expect(sanitized.refresh_token).toBe("[REDACTED]");
-      expect(sanitized.user_code).toBe("ABC123");
+      assert.strictEqual(sanitized.access_token, "[REDACTED]");
+      assert.strictEqual(sanitized.refresh_token, "[REDACTED]");
+      assert.strictEqual(sanitized.user_code, "ABC123");
     });
 
     test("should handle nested objects", () => {
@@ -136,14 +151,15 @@ describe("Validation", () => {
 
       const sanitized = sanitizeLogData(data);
 
-      expect(sanitized.auth.api_key).toBe("[REDACTED]");
-      expect(sanitized.auth.username).toBe("user");
+      assert.strictEqual(sanitized.auth.api_key, "[REDACTED]");
+      assert.strictEqual(sanitized.auth.username, "user");
     });
 
     test("should handle non-objects", () => {
-      expect(sanitizeLogData(null)).toBe(null);
-      expect(sanitizeLogData("string")).toBe("string");
-      expect(sanitizeLogData(123)).toBe(123);
+      assert.strictEqual(sanitizeLogData(null), null);
+      assert.strictEqual(sanitizeLogData("string"), "string");
+      assert.strictEqual(sanitizeLogData(123), 123);
     });
   });
 });
+
