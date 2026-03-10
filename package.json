@@ -1,6 +1,6 @@
 {
   "name": "opencode-qwen-oauth",
-  "version": "2.3.1",
+  "version": "2.4.0",
   "description": "Qwen OAuth authentication plugin for OpenCode - authenticate with Qwen.ai using OAuth device flow",
   "type": "module",
   "main": "dist/index.js",
